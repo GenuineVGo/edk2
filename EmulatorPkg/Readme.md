@@ -107,3 +107,23 @@ cd Build/EmulatorX64/DEBUG_CLANGDWARF/X64/
 
 Le script étant volontairement simple (cf. décision "priorité à la simplicité"), il doit être recopié manuellement
 dans le dossier `Build/.../X64/` après chaque build tant qu'aucune automatisation n'est en place.
+
+### Journal de mise au point du build CLANGDWARF (erreurs, causes, remèdes)
+
+Premier build après clone : plusieurs erreurs successives, résolues une à une. Dans l'ordre rencontré :
+
+| # | Erreur | Cause | Remède |
+|---|---|---|---|
+| 1 | `File/directory not found in workspace ... mipisyst/library/include` (puis `mbedtls/include`, `libspdm/include`) | Les submodules git ne sont pas initialisés après clone. Le validateur de méta-données edk2 (`build.py`) **scanne tous les `.dec` du workspace au démarrage**, pas seulement ceux réellement utilisés par `EmulatorPkg.dsc` : impossible de cibler finement, il faut tous les initialiser | `git submodule update --init --depth 1` (sur tous les submodules ; `--depth 1` limite fortement la conso de data vs un clone complet de l'historique) |
+| 2 | `Command 'build' not found` | `edksetup.sh` ajoute au PATH un wrapper Python (`BaseTools/BinWrappers/PosixLike/build`), mais les outils C de BaseTools (dont dépend ce wrapper) ne sont pas encore compilés | `make -C BaseTools` (nécessite `make`, absent par défaut de l'image WSL minimale) |
+| 3 | `Command 'make' not found` | Paquet `build-essential` non installé (WSL minimal, pas de outils de compilation C de base) | `sudo apt install -y build-essential uuid-dev nasm` |
+| 4 | `llvm-ar: not found` (`make tbuild` échoue avec `Error 127`) | La toolchain `CLANGDWARF` attend des binaires **non versionnés** (`llvm-ar`, `llvm-objcopy`) sur le `PATH`. Nos paquets Ubuntu installent des binaires versionnés (`llvm-ar-22`, `llvm-objcopy-22`) | `sudo update-alternatives --install /usr/bin/llvm-ar llvm-ar /usr/bin/llvm-ar-22 100` (idem pour `llvm-objcopy`) |
+| 5 | `X11GraphicsWindow.c:18:10: fatal error: 'X11/Xlib.h' file not found` | Le PCD `PcdEmuGop|L""` désactive le GOP **à l'exécution**, mais `EmulatorPkg/Unix/Host/Host.inf` compile toujours `X11GraphicsWindow.c` (le fichier source n'est pas retiré de la liste `[Sources]`). Il faut donc les headers X11 même en mode console | `sudo apt install -y libx11-dev libxext-dev` (`libxext-dev` manquait réellement ; `libx11-dev` était déjà présent) |
+| 6 | *(anticipée, pas rencontrée sur ce build précis)* — build ACPI nécessitant `iasl` | Le paquet Ubuntu ne s'appelle **pas** `iasl` mais `acpica-tools` (qui fournit le binaire `iasl`) | `sudo apt install -y acpica-tools` (installé par anticipation ; non invoqué par ce build EmulatorPkg X64 précis, mais nécessaire dès qu'un module génère des tables ACPI) |
+
+Résultat final : `- Done -`, `Host` généré dans `Build/EmulatorX64/DEBUG_CLANGDWARF/X64/Host`.
+
+**Piste d'amélioration "carrée" pour plus tard** : si le mode no-GOP doit vraiment retirer la dépendance X11 (et pas
+seulement la désactiver au runtime), il faudra rendre `X11GraphicsWindow.c`/`WinGopScreen.c` conditionnels dans
+`[Sources]` de `Host.inf` (ex: via une macro `!ifdef HEADLESS_BUILD`), ce qui évitera d'installer `libx11-dev` du
+tout sur les environnements CI headless.
