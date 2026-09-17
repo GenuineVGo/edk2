@@ -8,5 +8,8 @@ if [ -t 0 ]; then
     stty -icrnl
 fi
 
-./Host "$@"
+# stdin/stdout stay attached to the terminal (interactive UEFI Shell console).
+# Only stderr (PEI/DXE DEBUG() boot log) is captured to a file, see EmulatorPkg/Readme.md.
+LOGFILE="${LOGFILE:-debug_boot.log}"
+./Host "$@" 2>"$LOGFILE"
 exit $?

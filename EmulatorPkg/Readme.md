@@ -105,6 +105,28 @@ cd Build/EmulatorX64/DEBUG_CLANGDWARF/X64/
 ./host.sh
 ```
 
+### Pourquoi il n'y a aucun fichier de log par défaut
+
+Comme pour `build` (voir tableau ci-dessus), rien n'est jamais persisté sur disque par défaut : tout part sur les
+flux du process `Host`. En creusant le code source, deux canaux bien distincts existent :
+
+- **Console UEFI Shell (interactive)** : `stdin`/`stdout` réels du process (`gEmuThunk->ConfigStdIn` /
+  `WriteStdOut` dans [Library/DxeEmuSerialPortLib/DxeEmuSerialPortLib.c](Library/DxeEmuSerialPortLib/DxeEmuSerialPortLib.c)),
+  reliés à votre nouveau device path console VT100.
+- **Boot log PEI/DXE (`DEBUG()`)** : redirigé vers `stderr` du process, indépendamment de la console UEFI
+  (`gEmuThunk->WriteStdErr` → `write(STDERR_FILENO, ...)` dans
+  [Unix/Host/EmuThunk.c](Unix/Host/EmuThunk.c), voir aussi le mapping `SerialPortLib|...DxeEmuStdErrSerialPortLib...`
+  dans [EmulatorPkg.dsc](EmulatorPkg.dsc) lignes 401/414).
+
+Ces deux flux étant séparés (stdout vs stderr), `host.sh` peut rediriger uniquement `stderr` vers un fichier
+**sans jamais toucher `stdin`/`stdout`** : le Shell reste 100% interactif, seul le boot log est capturé.
+C'est ce que fait le script par défaut (`debug_boot.log` à côté du binaire `Host`) :
+
+```bash
+./host.sh                       # boot log -> ./debug_boot.log, Shell interactif inchangé
+LOGFILE=/tmp/run1.log ./host.sh # nom de fichier personnalisé
+```
+
 Le script étant volontairement simple (cf. décision "priorité à la simplicité"), il doit être recopié manuellement
 dans le dossier `Build/.../X64/` après chaque build tant qu'aucune automatisation n'est en place.
 
