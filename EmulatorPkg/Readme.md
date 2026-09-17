@@ -86,6 +86,10 @@ UEFI sur un terminal série VT100, pour un usage headless / scriptable (CI, shif
   série (VT100, 115200 8N1) dans `gPlatformConsole`
 - [Unix/Host/PosixFileSystem.c](Unix/Host/PosixFileSystem.c) : correction du calcul d'année (`tm_year` compte depuis
   1900, il manquait le `+ 1900`)
+- [Unix/Host/EmuThunk.c](Unix/Host/EmuThunk.c) : `SecReadStdIn` remape DEL (`0x7F`, ce qu'envoient la plupart des
+  terminaux Linux pour la touche Retour arrière) vers BS (`0x08`, ASCII), seul octet reconnu par l'éditeur de
+  ligne du Shell UEFI (VT100). Sans ce correctif, l'effacement visuel fonctionne mais **la commande réellement
+  exécutée reste fausse silencieusement** (découvert via [Unix/tests/validate_console_poc.py](Unix/tests/validate_console_poc.py))
 - [Unix/host.sh](Unix/host.sh) : script de lancement qui désactive `icrnl` sur le terminal hôte (sinon la touche
   Entrée casse la saisie dans l'EFI Shell, la console série VT100 gérant elle-même le CR) et restaure le terminal
   à la sortie (`trap ... EXIT INT TERM`), même en cas de crash ou de Ctrl+C
@@ -145,6 +149,25 @@ Le fichier contient les séquences d'échappement VT100 (couleurs, positionnemen
 ```bash
 sed -r 's/\x1B\[[0-9;]*[a-zA-Z]//g' shell_console.log | less
 ```
+
+### Validation automatisée du PoC console (Entrée, Backspace, `reset -s`, stabilité)
+
+[Unix/tests/validate_console_poc.py](Unix/tests/validate_console_poc.py) automatise, via `pexpect`, la plus petite
+validation reproductible du switch GOP -> console : boot jusqu'au prompt `Shell>`, frappe d'une commande erronée
+corrigée au Backspace (octet DEL `0x7F`, comme un vrai clavier) puis validée par Entrée (CR `\r`, pas LF), sortie
+via `reset -s`, le tout répété 3 fois pour prouver la stabilité et la bonne restauration du TTY.
+
+```bash
+sudo apt install -y python3-pexpect   # une fois
+cd EmulatorPkg/Unix/tests && python3 validate_console_poc.py
+```
+
+Deux pièges découverts en écrivant ce script, à connaître pour tout futur pilotage du Shell (pytest, CI...) :
+- la console UEFI n'accepte que **CR** (`\r`) pour Entrée, pas LF (`\n`, envoyé par défaut par la plupart des
+  outils d'automatisation type `pexpect.sendline`) ;
+- le flux affiché contient des séquences VT100 **entre chaque caractère** (repositionnement curseur), donc un
+  simple `pattern.search("Shell>")` échoue — il faut un motif tolérant aux échappements intercalés (voir la
+  fonction `fuzzy()` du script).
 
 Le script étant volontairement simple (cf. décision "priorité à la simplicité"), il doit être recopié manuellement
 dans le dossier `Build/.../X64/` après chaque build tant qu'aucune automatisation n'est en place.

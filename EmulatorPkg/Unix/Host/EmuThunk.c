@@ -98,8 +98,22 @@ SecReadStdIn (
   )
 {
   ssize_t  Return;
+  ssize_t  Index;
 
   Return = read (STDIN_FILENO, Buffer, (size_t)NumberOfBytes);
+
+  if (Return > 0) {
+    //
+    // Most Linux terminals send DEL (0x7F) for the Backspace key, but the UEFI Shell's
+    // VT100 console line editor only recognizes ASCII BS (0x08). Remap here rather than
+    // relying on host terminal configuration, which would vary per user/emulator.
+    //
+    for (Index = 0; Index < Return; Index++) {
+      if (Buffer[Index] == 0x7F) {
+        Buffer[Index] = 0x08;
+      }
+    }
+  }
 
   return (Return == -1) ? 0 : Return;
 }
