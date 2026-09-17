@@ -127,6 +127,25 @@ C'est ce que fait le script par défaut (`debug_boot.log` à côté du binaire `
 LOGFILE=/tmp/run1.log ./host.sh # nom de fichier personnalisé
 ```
 
+### Logger la sortie des commandes du Shell UEFI (ex: `acpiview`)
+
+Le contenu du Shell UEFI (ce que produit `acpiview`, `dh`, etc.) transite par `stdout`, pas par `stderr` : il ne
+suffit pas de rediriger `stdout` vers un fichier, sinon plus rien ne s'affiche à l'écran. `host.sh` duplique donc
+`stdout` vers le terminal **et** vers un fichier via `tee` (process substitution bash `> >(tee ...)`, qui préserve
+le code de sortie réel de `Host`, contrairement à un simple `| tee`) :
+
+```bash
+./host.sh                              # sortie Shell -> ./shell_console.log (+ affichée normalement)
+SHELL_LOGFILE=/tmp/acpiview.log ./host.sh
+```
+
+Le fichier contient les séquences d'échappement VT100 (couleurs, positionnement curseur) puisque c'est une vraie
+émulation de terminal. Pour le relire proprement une fois la session terminée :
+
+```bash
+sed -r 's/\x1B\[[0-9;]*[a-zA-Z]//g' shell_console.log | less
+```
+
 Le script étant volontairement simple (cf. décision "priorité à la simplicité"), il doit être recopié manuellement
 dans le dossier `Build/.../X64/` après chaque build tant qu'aucune automatisation n'est en place.
 

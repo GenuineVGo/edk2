@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Tester-side launcher for EmulatorPkg Host.
 cd "$(dirname "$0")" || exit 1
 
@@ -8,8 +8,11 @@ if [ -t 0 ]; then
     stty -icrnl
 fi
 
-# stdin/stdout stay attached to the terminal (interactive UEFI Shell console).
-# Only stderr (PEI/DXE DEBUG() boot log) is captured to a file, see EmulatorPkg/Readme.md.
+# stdin stays attached to the terminal (interactive UEFI Shell input, e.g. acpiview).
+# stdout is duplicated to the terminal AND to SHELL_LOGFILE via `tee` (process substitution,
+# hence bash and not POSIX sh: keeps Host's own exit code, unlike a plain `| tee` pipe).
+# stderr (PEI/DXE DEBUG() boot log) is captured separately, see EmulatorPkg/Readme.md.
 LOGFILE="${LOGFILE:-debug_boot.log}"
-./Host "$@" 2>"$LOGFILE"
+SHELL_LOGFILE="${SHELL_LOGFILE:-shell_console.log}"
+./Host "$@" > >(tee "$SHELL_LOGFILE") 2>"$LOGFILE"
 exit $?
