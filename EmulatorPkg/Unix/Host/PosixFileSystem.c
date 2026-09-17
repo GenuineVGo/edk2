@@ -213,7 +213,7 @@ PosixSystemTimeToEfiTime (
   struct tm  *tm;
 
   tm               = gmtime (&SystemTime);
-  Time->Year       = tm->tm_year;
+  Time->Year       = tm->tm_year + 1900;
   Time->Month      = tm->tm_mon + 1;
   Time->Day        = tm->tm_mday;
   Time->Hour       = tm->tm_hour;
