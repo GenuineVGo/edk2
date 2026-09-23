@@ -20,6 +20,8 @@
 #define RHEA1_PPTT_SOCKET_COUNT       2
 #define RHEA1_PPTT_CORES_PER_SOCKET  128
 #define RHEA1_PPTT_CORE_COUNT        (RHEA1_PPTT_SOCKET_COUNT * RHEA1_PPTT_CORES_PER_SOCKET)
+#define RHEA1_PPTT_CORE_RECORD_INDEX(Socket, Core) \
+  ((Socket) * RHEA1_PPTT_CORES_PER_SOCKET + (Core))
 
 #define RHEA1_PPTT_L1I_SIZE  (64U * 1024U)
 #define RHEA1_PPTT_L1D_SIZE  (64U * 1024U)
@@ -32,10 +34,15 @@
 #define RHEA1_PPTT_L2_ASSOC 8U
 
 #define RHEA1_PPTT_ACPI_PROCESSOR_ID(Socket, Core)  (((Socket) << 24) | ((Core) << 16))
-#define RHEA1_PPTT_CORE_INDEX(Socket, Core)         ((Socket) * RHEA1_PPTT_CORES_PER_SOCKET + (Core))
 #define RHEA1_PPTT_ARRAY_OFFSET(Field, Index) \
   ((UINT32)(OFFSET_OF (RHEA1_PPTT_TABLE, Field) + \
             (sizeof (((RHEA1_PPTT_TABLE *)0)->Field[0]) * (Index))))
+#define RHEA1_PPTT_BOARD_OFFSET \
+  ((UINT32)OFFSET_OF (RHEA1_PPTT_TABLE, Board))
+#define RHEA1_PPTT_RECORD_OFFSET(Socket, Core, Field) \
+  ((UINT32)(OFFSET_OF (RHEA1_PPTT_TABLE, CoreRecord) + \
+            (sizeof (RHEA1_PPTT_CORE_RECORD) * RHEA1_PPTT_CORE_RECORD_INDEX (Socket, Core)) + \
+            OFFSET_OF (RHEA1_PPTT_CORE_RECORD, Field)))
 
 typedef struct {
   EFI_ACPI_6_4_PPTT_STRUCTURE_PROCESSOR  Processor;
@@ -43,18 +50,19 @@ typedef struct {
 } RHEA1_PPTT_SOCKET;
 
 typedef struct {
-  EFI_ACPI_6_4_PPTT_STRUCTURE_PROCESSOR  Processor;
-  UINT32                                  Resources[3];
-} RHEA1_PPTT_CORE;
+  EFI_ACPI_6_4_PPTT_STRUCTURE_CACHE       L1I;
+  EFI_ACPI_6_4_PPTT_STRUCTURE_CACHE       L1D;
+  EFI_ACPI_6_4_PPTT_STRUCTURE_CACHE       L2;
+  EFI_ACPI_6_4_PPTT_STRUCTURE_PROCESSOR   Processor;
+  UINT32                                   Resources[2];
+} RHEA1_PPTT_CORE_RECORD;
 
 typedef struct {
   EFI_ACPI_DESCRIPTION_HEADER              Header;
-  EFI_ACPI_6_4_PPTT_STRUCTURE_CACHE        Slc[RHEA1_PPTT_SOCKET_COUNT];
-  EFI_ACPI_6_4_PPTT_STRUCTURE_CACHE        L2[RHEA1_PPTT_CORE_COUNT];
-  EFI_ACPI_6_4_PPTT_STRUCTURE_CACHE        L1D[RHEA1_PPTT_CORE_COUNT];
-  EFI_ACPI_6_4_PPTT_STRUCTURE_CACHE        L1I[RHEA1_PPTT_CORE_COUNT];
+  EFI_ACPI_6_4_PPTT_STRUCTURE_PROCESSOR    Board;
   RHEA1_PPTT_SOCKET                         Socket[RHEA1_PPTT_SOCKET_COUNT];
-  RHEA1_PPTT_CORE                           Core[RHEA1_PPTT_CORE_COUNT];
+  EFI_ACPI_6_4_PPTT_STRUCTURE_CACHE        Slc[RHEA1_PPTT_SOCKET_COUNT];
+  RHEA1_PPTT_CORE_RECORD                     CoreRecord[RHEA1_PPTT_CORE_COUNT];
 } RHEA1_PPTT_TABLE;
 
 #define RHEA1_PPTT_CACHE_FLAGS \
@@ -84,7 +92,7 @@ typedef struct {
 #define RHEA1_PPTT_L1D(SocketId, CoreId) \
   { .Type = EFI_ACPI_6_4_PPTT_TYPE_CACHE, .Length = sizeof (EFI_ACPI_6_4_PPTT_STRUCTURE_CACHE), \
     .Reserved = { 0, 0 }, .Flags = RHEA1_PPTT_CACHE_FLAGS, \
-    .NextLevelOfCache = RHEA1_PPTT_ARRAY_OFFSET (L2, RHEA1_PPTT_CORE_INDEX (SocketId, CoreId)), \
+    .NextLevelOfCache = RHEA1_PPTT_RECORD_OFFSET (SocketId, CoreId, L2), \
     .Size = RHEA1_PPTT_L1D_SIZE, .NumberOfSets = RHEA1_PPTT_L1_SETS, .Associativity = RHEA1_PPTT_L1_ASSOC, \
     .Attributes = RHEA1_PPTT_CACHE_ATTRIBUTES (EFI_ACPI_6_4_CACHE_ATTRIBUTES_CACHE_TYPE_DATA), \
     .LineSize = RHEA1_PPTT_LINE_SIZE, .CacheId = 0x10 }
@@ -92,7 +100,7 @@ typedef struct {
 #define RHEA1_PPTT_L1I(SocketId, CoreId) \
   { .Type = EFI_ACPI_6_4_PPTT_TYPE_CACHE, .Length = sizeof (EFI_ACPI_6_4_PPTT_STRUCTURE_CACHE), \
     .Reserved = { 0, 0 }, .Flags = RHEA1_PPTT_CACHE_FLAGS, \
-    .NextLevelOfCache = RHEA1_PPTT_ARRAY_OFFSET (L2, RHEA1_PPTT_CORE_INDEX (SocketId, CoreId)), \
+    .NextLevelOfCache = RHEA1_PPTT_RECORD_OFFSET (SocketId, CoreId, L2), \
     .Size = RHEA1_PPTT_L1I_SIZE, .NumberOfSets = RHEA1_PPTT_L1_SETS, .Associativity = RHEA1_PPTT_L1_ASSOC, \
     .Attributes = RHEA1_PPTT_CACHE_ATTRIBUTES (EFI_ACPI_6_4_CACHE_ATTRIBUTES_CACHE_TYPE_INSTRUCTION), \
     .LineSize = RHEA1_PPTT_LINE_SIZE, .CacheId = 0x11 }
@@ -104,20 +112,24 @@ typedef struct {
 #define RHEA1_PPTT_SOCKET_NODE(SocketId) \
   { .Processor = { .Type = EFI_ACPI_6_4_PPTT_TYPE_PROCESSOR, \
   .Length = sizeof (EFI_ACPI_6_4_PPTT_STRUCTURE_PROCESSOR) + sizeof (UINT32), .Reserved = { 0, 0 }, \
-      .Flags = RHEA1_PPTT_PROCESSOR_FLAGS (1, 0, 0), .Parent = 0, .AcpiProcessorId = 0, \
+      .Flags = RHEA1_PPTT_PROCESSOR_FLAGS (1, 0, 0), \
+      .Parent = RHEA1_PPTT_BOARD_OFFSET, .AcpiProcessorId = 0, \
       .NumberOfPrivateResources = 1 }, \
     .Resources = { RHEA1_PPTT_ARRAY_OFFSET (Slc, SocketId) } }
 
-#define RHEA1_PPTT_CORE_NODE(SocketId, CoreId) \
-  { .Processor = { .Type = EFI_ACPI_6_4_PPTT_TYPE_PROCESSOR, \
-  .Length = sizeof (EFI_ACPI_6_4_PPTT_STRUCTURE_PROCESSOR) + (3 * sizeof (UINT32)), .Reserved = { 0, 0 }, \
+#define RHEA1_PPTT_CORE_RECORD_NODE(SocketId, CoreId) \
+  { .L1I = RHEA1_PPTT_L1I (SocketId, CoreId), \
+    .L1D = RHEA1_PPTT_L1D (SocketId, CoreId), \
+    .L2 = RHEA1_PPTT_L2 (SocketId, CoreId), \
+    .Processor = { .Type = EFI_ACPI_6_4_PPTT_TYPE_PROCESSOR, \
+  .Length = sizeof (EFI_ACPI_6_4_PPTT_STRUCTURE_PROCESSOR) + (2 * sizeof (UINT32)), .Reserved = { 0, 0 }, \
       .Flags = RHEA1_PPTT_PROCESSOR_FLAGS (0, 1, 1), \
       .Parent = RHEA1_PPTT_ARRAY_OFFSET (Socket, SocketId), \
       .AcpiProcessorId = RHEA1_PPTT_ACPI_PROCESSOR_ID (SocketId, CoreId), \
       .NumberOfPrivateResources = 2 }, \
     .Resources = { \
-      RHEA1_PPTT_ARRAY_OFFSET (L1I, RHEA1_PPTT_CORE_INDEX (SocketId, CoreId)), \
-      RHEA1_PPTT_ARRAY_OFFSET (L1D, RHEA1_PPTT_CORE_INDEX (SocketId, CoreId)) } }
+      RHEA1_PPTT_RECORD_OFFSET (SocketId, CoreId, L1I), \
+      RHEA1_PPTT_RECORD_OFFSET (SocketId, CoreId, L1D) } }
 
 #define RHEA1_PPTT_128(Macro, SocketId) \
   Macro(SocketId,0),Macro(SocketId,1),Macro(SocketId,2),Macro(SocketId,3),Macro(SocketId,4),Macro(SocketId,5),Macro(SocketId,6),Macro(SocketId,7), \
@@ -149,12 +161,21 @@ STATIC CONST RHEA1_PPTT_TABLE  mPpttTable = {
     .CreatorId = SIGNATURE_32 (' ', ' ', ' ', ' '),
     .CreatorRevision = 0x01000013
   },
-  .Slc = { RHEA1_PPTT_SLC (0), RHEA1_PPTT_SLC (1) },
-  .L2 = { RHEA1_PPTT_128 (RHEA1_PPTT_L2, 0), RHEA1_PPTT_128 (RHEA1_PPTT_L2, 1) },
-  .L1D = { RHEA1_PPTT_128 (RHEA1_PPTT_L1D, 0), RHEA1_PPTT_128 (RHEA1_PPTT_L1D, 1) },
-  .L1I = { RHEA1_PPTT_128 (RHEA1_PPTT_L1I, 0), RHEA1_PPTT_128 (RHEA1_PPTT_L1I, 1) },
+  .Board = {
+    .Type = EFI_ACPI_6_4_PPTT_TYPE_PROCESSOR,
+    .Length = sizeof (EFI_ACPI_6_4_PPTT_STRUCTURE_PROCESSOR),
+    .Reserved = { 0, 0 },
+    .Flags = RHEA1_PPTT_PROCESSOR_FLAGS (0, 0, 0),
+    .Parent = 0,
+    .AcpiProcessorId = 0,
+    .NumberOfPrivateResources = 0
+  },
   .Socket = { RHEA1_PPTT_SOCKET_NODE (0), RHEA1_PPTT_SOCKET_NODE (1) },
-  .Core = { RHEA1_PPTT_128 (RHEA1_PPTT_CORE_NODE, 0), RHEA1_PPTT_128 (RHEA1_PPTT_CORE_NODE, 1) }
+  .Slc = { RHEA1_PPTT_SLC (0), RHEA1_PPTT_SLC (1) },
+  .CoreRecord = {
+    RHEA1_PPTT_128 (RHEA1_PPTT_CORE_RECORD_NODE, 0),
+    RHEA1_PPTT_128 (RHEA1_PPTT_CORE_RECORD_NODE, 1)
+  }
 };
 
 EFI_STATUS

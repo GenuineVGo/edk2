@@ -223,7 +223,7 @@ La constante décrit :
 1 L1I privé par core
 ```
 
-La hiérarchie est `socket -> core`; aucun nœud cluster intermédiaire n'est ajouté. Les IDs processeur suivent
+La hiérarchie est `Board -> socket -> core`; aucun nœud cluster intermédiaire n'est ajouté. Les IDs processeur suivent
 `ACPI_CPU_ID_ENCODE(socket, core)`. Les paramètres cache sont ceux de la référence Ampere/PPTT fournie, avec le
 SLC Rhea1 fixé à 80 MiB par socket :
 
@@ -233,11 +233,12 @@ L2      : 1 MiB, 2048 sets, associativité 8, ligne 64 octets, ID 0x20
 SLC     : 80 MiB par socket, ID 0x30
 ```
 
-Tous les flags de propriété cache sont valides. Chaque core possède deux ressources privées (L1I et L1D) ;
+Tous les flags de propriété cache sont valides. Chaque `CoreRecord` regroupe localement L1I, L1D, L2 et le nœud
+processor correspondant. Chaque core possède deux ressources privées (L1I et L1D) ;
 L1I/L1D pointent vers le L2 par `NextLevelOfCache`, et le L2 pointe vers le SLC de son socket.
 
 Après rebuild, `acpiview -s PPTT -d` produit un dump binaire de 29 836 octets, décodable par `iasl -d`. La table
-contient donc maintenant le header, 770 caches, 2 nœuds socket et 256 nœuds core. La cohérence avec la MADT sera
+contient donc maintenant le header, le nœud `Board`, 770 caches, 2 nœuds socket et 256 nœuds core. La cohérence avec la MADT sera
 validée séparément : la PPTT décrit la capacité/topologie constante, tandis que la MADT reste la source de découverte
 et d'activation des processeurs.
 
