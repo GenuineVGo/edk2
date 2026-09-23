@@ -9,10 +9,9 @@ if [ -t 0 ]; then
 fi
 
 # stdin stays attached to the terminal (interactive UEFI Shell input, e.g. acpiview).
-# stdout is duplicated to the terminal AND to SHELL_LOGFILE via `tee` (process substitution,
-# hence bash and not POSIX sh: keeps Host's own exit code, unlike a plain `| tee` pipe).
-# stderr (PEI/DXE DEBUG() boot log) is captured separately, see EmulatorPkg/Readme.md.
-LOGFILE="${LOGFILE:-debug_boot.log}"
-SHELL_LOGFILE="${SHELL_LOGFILE:-shell_console.log}"
-./Host "$@" > >(tee "$SHELL_LOGFILE") 2>"$LOGFILE"
+# stdout (shell) and stderr (PEI/DXE DEBUG() boot log) are duplicated to the terminal
+# AND to debug.log via `tee` (process substitution, hence bash and not POSIX sh: keeps Host's
+# own exit code, unlike a plain `| tee` pipe).
+LOGFILE="${LOGFILE:-debug.log}"
+./Host "$@" 2>&1 | tee debug.log
 exit $?
