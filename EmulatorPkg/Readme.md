@@ -186,6 +186,25 @@ Après rebuild, `acpiview` est reconnu. Dans l'EmulatorPkg vanilla actuel, son e
 qu'aucune table ACPI n'est encore publiée par le modèle EmulatorPkg, et non que l'intégration de la commande a
 échoué.
 
+Pour obtenir un dump binaire ACPI dans le répertoire host exposé par l'Emulator, sélectionner d'abord le volume
+virtuel `FS0:` dans le Shell :
+
+```text
+Shell> FS0:
+FS0:\> acpiview -s PPTT -d
+FS0:\> ls *.bin
+PPTT0000.bin
+```
+
+`acpiview -d` écrit dans le répertoire courant du Shell. Avec `FS0:` sélectionné, ce répertoire correspond au
+filesystem host configuré par `PcdEmuFileSystem|L"."`, donc au dossier depuis lequel `host.sh` a lancé `Host`
+(normalement `Build/EmulatorX64/DEBUG_CLANGDWARF/X64/`). Le fichier `PPTT0000.bin` est ainsi directement
+récupérable par les outils host, sans parser le texte VT100 de la sortie console.
+
+Si le Shell démarre sur un autre volume ou dans un répertoire non writable, `acpiview -d` affiche :
+`Unable to write to the current directory, check if media is writable.` Dans ce cas, utiliser `FS0:` puis vérifier
+le répertoire courant avec `pwd` avant de relancer la commande.
+
 ### Première table ACPI : header PPTT minimal
 
 Le PoC ajoute [PpttDxe/PpttDxe.c](PpttDxe/PpttDxe.c) et son fichier INF. Le driver publie uniquement un header
