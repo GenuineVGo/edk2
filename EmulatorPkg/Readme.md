@@ -186,6 +186,17 @@ Après rebuild, `acpiview` est reconnu. Dans l'EmulatorPkg vanilla actuel, son e
 qu'aucune table ACPI n'est encore publiée par le modèle EmulatorPkg, et non que l'intégration de la commande a
 échoué.
 
+### Première table ACPI : header PPTT minimal
+
+Le PoC ajoute [PpttDxe/PpttDxe.c](PpttDxe/PpttDxe.c) et son fichier INF. Le driver publie uniquement un header
+`PPTT` ACPI via `EFI_ACPI_TABLE_PROTOCOL`; aucun nœud processeur ni cache n'est encore décrit. Comme ce protocole
+n'était pas encore embarqué par EmulatorPkg, `AcpiTableDxe` est également ajouté dans `EmulatorPkg.dsc` et
+`EmulatorPkg.fdf`.
+
+Après rebuild, `acpiview -h` confirme : signature `PPTT`, longueur `36` octets (header seul), révision `3` et
+checksum valide. La sortie signale également une entrée XSDT nulle (`Entry[0]`) ; ce constat préexistant est
+indépendant de la PPTT et sera traité séparément.
+
 ### Journal de mise au point du build CLANGDWARF (erreurs, causes, remèdes)
 
 Premier build après clone : plusieurs erreurs successives, résolues une à une. Dans l'ordre rencontré :

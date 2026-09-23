@@ -225,6 +225,8 @@ INF  EmulatorPkg/EmuSnpDxe/EmuSnpDxe.inf
 !include RedfishPkg/Redfish.fdf.inc
 
 INF FatPkg/EnhancedFatDxe/Fat.inf
+INF MdeModulePkg/Universal/Acpi/AcpiTableDxe/AcpiTableDxe.inf
+INF EmulatorPkg/PpttDxe/PpttDxe.inf
 
 !if "XCODE5" not in $(TOOL_CHAIN_TAG)
 INF  ShellPkg/DynamicCommand/TftpDynamicCommand/TftpDynamicCommand.inf

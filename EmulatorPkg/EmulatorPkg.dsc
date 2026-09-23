@@ -467,6 +467,8 @@
   }
 
   MdeModulePkg/Universal/Console/TerminalDxe/TerminalDxe.inf
+  MdeModulePkg/Universal/Acpi/AcpiTableDxe/AcpiTableDxe.inf
+  EmulatorPkg/PpttDxe/PpttDxe.inf
   MdeModulePkg/Universal/BdsDxe/BdsDxe.inf
 !if "XCODE5" not in $(TOOL_CHAIN_TAG)
   MdeModulePkg/Logo/LogoDxe.inf
