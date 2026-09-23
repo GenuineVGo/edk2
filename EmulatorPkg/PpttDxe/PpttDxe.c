@@ -5,8 +5,8 @@
   or runtime topology information. The MADT remains the source of processor
   discovery and enablement; this PPTT describes the maximum two-socket topology.
 
-  Cache sizes marked PLACEHOLDER must be replaced when the final Rhea1 cache
-  contract is frozen. Unknown cache properties are deliberately invalidated.
+  Cache geometry is based on the supplied SiPearl/Ampere PPTT reference. The
+  Rhea1 SLC size is fixed at 80 MiB per socket.
 
   SPDX-License-Identifier: BSD-2-Clause-Patent
 **/
@@ -21,11 +21,15 @@
 #define RHEA1_PPTT_CORES_PER_SOCKET  128
 #define RHEA1_PPTT_CORE_COUNT        (RHEA1_PPTT_SOCKET_COUNT * RHEA1_PPTT_CORES_PER_SOCKET)
 
-// PLACEHOLDER: replace with the frozen Rhea1 cache contract.
-#define RHEA1_PPTT_L1I_SIZE  (32U * 1024U)
-#define RHEA1_PPTT_L1D_SIZE  (32U * 1024U)
-#define RHEA1_PPTT_L2_SIZE   (64U * 1024U)
+#define RHEA1_PPTT_L1I_SIZE  (64U * 1024U)
+#define RHEA1_PPTT_L1D_SIZE  (64U * 1024U)
+#define RHEA1_PPTT_L2_SIZE   (1U * 1024U * 1024U)
 #define RHEA1_PPTT_SLC_SIZE  (80U * 1024U * 1024U)
+#define RHEA1_PPTT_LINE_SIZE 64U
+#define RHEA1_PPTT_L1_SETS  0x100U
+#define RHEA1_PPTT_L1_ASSOC 4U
+#define RHEA1_PPTT_L2_SETS  0x800U
+#define RHEA1_PPTT_L2_ASSOC 8U
 
 #define RHEA1_PPTT_ACPI_PROCESSOR_ID(Socket, Core)  (((Socket) << 24) | ((Core) << 16))
 #define RHEA1_PPTT_CORE_INDEX(Socket, Core)         ((Socket) * RHEA1_PPTT_CORES_PER_SOCKET + (Core))
@@ -54,9 +58,9 @@ typedef struct {
 } RHEA1_PPTT_TABLE;
 
 #define RHEA1_PPTT_CACHE_FLAGS \
-  { .SizePropertyValid = 1, .NumberOfSetsValid = 0, .AssociativityValid = 0, \
-    .AllocationTypeValid = 0, .CacheTypeValid = 1, .WritePolicyValid = 0, \
-    .LineSizeValid = 0, .CacheIdValid = 0 }
+  { .SizePropertyValid = 1, .NumberOfSetsValid = 1, .AssociativityValid = 1, \
+    .AllocationTypeValid = 1, .CacheTypeValid = 1, .WritePolicyValid = 1, \
+    .LineSizeValid = 1, .CacheIdValid = 1 }
 
 #define RHEA1_PPTT_CACHE_ATTRIBUTES(Type) \
   { .AllocationType = EFI_ACPI_6_4_CACHE_ATTRIBUTES_ALLOCATION_READ_WRITE, \
@@ -65,33 +69,33 @@ typedef struct {
 #define RHEA1_PPTT_SLC(SocketId) \
   { .Type = EFI_ACPI_6_4_PPTT_TYPE_CACHE, .Length = sizeof (EFI_ACPI_6_4_PPTT_STRUCTURE_CACHE), \
     .Reserved = { 0, 0 }, .Flags = RHEA1_PPTT_CACHE_FLAGS, .NextLevelOfCache = 0, \
-    .Size = RHEA1_PPTT_SLC_SIZE, .NumberOfSets = 0, .Associativity = 0, \
+    .Size = RHEA1_PPTT_SLC_SIZE, .NumberOfSets = 1, .Associativity = 1, \
     .Attributes = RHEA1_PPTT_CACHE_ATTRIBUTES (EFI_ACPI_6_4_CACHE_ATTRIBUTES_CACHE_TYPE_UNIFIED), \
-    .LineSize = 0, .CacheId = 0 }
+    .LineSize = RHEA1_PPTT_LINE_SIZE, .CacheId = 0x30 }
 
 #define RHEA1_PPTT_L2(SocketId, CoreId) \
   { .Type = EFI_ACPI_6_4_PPTT_TYPE_CACHE, .Length = sizeof (EFI_ACPI_6_4_PPTT_STRUCTURE_CACHE), \
     .Reserved = { 0, 0 }, .Flags = RHEA1_PPTT_CACHE_FLAGS, \
     .NextLevelOfCache = RHEA1_PPTT_ARRAY_OFFSET (Slc, SocketId), .Size = RHEA1_PPTT_L2_SIZE, \
-    .NumberOfSets = 0, .Associativity = 0, \
+    .NumberOfSets = RHEA1_PPTT_L2_SETS, .Associativity = RHEA1_PPTT_L2_ASSOC, \
     .Attributes = RHEA1_PPTT_CACHE_ATTRIBUTES (EFI_ACPI_6_4_CACHE_ATTRIBUTES_CACHE_TYPE_UNIFIED), \
-    .LineSize = 0, .CacheId = 0 }
+    .LineSize = RHEA1_PPTT_LINE_SIZE, .CacheId = 0x20 }
 
 #define RHEA1_PPTT_L1D(SocketId, CoreId) \
   { .Type = EFI_ACPI_6_4_PPTT_TYPE_CACHE, .Length = sizeof (EFI_ACPI_6_4_PPTT_STRUCTURE_CACHE), \
     .Reserved = { 0, 0 }, .Flags = RHEA1_PPTT_CACHE_FLAGS, \
     .NextLevelOfCache = RHEA1_PPTT_ARRAY_OFFSET (L2, RHEA1_PPTT_CORE_INDEX (SocketId, CoreId)), \
-    .Size = RHEA1_PPTT_L1D_SIZE, .NumberOfSets = 0, .Associativity = 0, \
+    .Size = RHEA1_PPTT_L1D_SIZE, .NumberOfSets = RHEA1_PPTT_L1_SETS, .Associativity = RHEA1_PPTT_L1_ASSOC, \
     .Attributes = RHEA1_PPTT_CACHE_ATTRIBUTES (EFI_ACPI_6_4_CACHE_ATTRIBUTES_CACHE_TYPE_DATA), \
-    .LineSize = 0, .CacheId = 0 }
+    .LineSize = RHEA1_PPTT_LINE_SIZE, .CacheId = 0x10 }
 
 #define RHEA1_PPTT_L1I(SocketId, CoreId) \
   { .Type = EFI_ACPI_6_4_PPTT_TYPE_CACHE, .Length = sizeof (EFI_ACPI_6_4_PPTT_STRUCTURE_CACHE), \
     .Reserved = { 0, 0 }, .Flags = RHEA1_PPTT_CACHE_FLAGS, \
     .NextLevelOfCache = RHEA1_PPTT_ARRAY_OFFSET (L2, RHEA1_PPTT_CORE_INDEX (SocketId, CoreId)), \
-    .Size = RHEA1_PPTT_L1I_SIZE, .NumberOfSets = 0, .Associativity = 0, \
+    .Size = RHEA1_PPTT_L1I_SIZE, .NumberOfSets = RHEA1_PPTT_L1_SETS, .Associativity = RHEA1_PPTT_L1_ASSOC, \
     .Attributes = RHEA1_PPTT_CACHE_ATTRIBUTES (EFI_ACPI_6_4_CACHE_ATTRIBUTES_CACHE_TYPE_INSTRUCTION), \
-    .LineSize = 0, .CacheId = 0 }
+    .LineSize = RHEA1_PPTT_LINE_SIZE, .CacheId = 0x11 }
 
 #define RHEA1_PPTT_PROCESSOR_FLAGS(Package, IdValid, Leaf) \
   { .PhysicalPackage = (Package), .AcpiProcessorIdValid = (IdValid), .ProcessorIsAThread = 0, \
@@ -99,22 +103,21 @@ typedef struct {
 
 #define RHEA1_PPTT_SOCKET_NODE(SocketId) \
   { .Processor = { .Type = EFI_ACPI_6_4_PPTT_TYPE_PROCESSOR, \
-      .Length = sizeof (EFI_ACPI_6_4_PPTT_STRUCTURE_PROCESSOR), .Reserved = { 0, 0 }, \
+  .Length = sizeof (EFI_ACPI_6_4_PPTT_STRUCTURE_PROCESSOR) + sizeof (UINT32), .Reserved = { 0, 0 }, \
       .Flags = RHEA1_PPTT_PROCESSOR_FLAGS (1, 0, 0), .Parent = 0, .AcpiProcessorId = 0, \
       .NumberOfPrivateResources = 1 }, \
     .Resources = { RHEA1_PPTT_ARRAY_OFFSET (Slc, SocketId) } }
 
 #define RHEA1_PPTT_CORE_NODE(SocketId, CoreId) \
   { .Processor = { .Type = EFI_ACPI_6_4_PPTT_TYPE_PROCESSOR, \
-      .Length = sizeof (EFI_ACPI_6_4_PPTT_STRUCTURE_PROCESSOR), .Reserved = { 0, 0 }, \
+  .Length = sizeof (EFI_ACPI_6_4_PPTT_STRUCTURE_PROCESSOR) + (3 * sizeof (UINT32)), .Reserved = { 0, 0 }, \
       .Flags = RHEA1_PPTT_PROCESSOR_FLAGS (0, 1, 1), \
       .Parent = RHEA1_PPTT_ARRAY_OFFSET (Socket, SocketId), \
       .AcpiProcessorId = RHEA1_PPTT_ACPI_PROCESSOR_ID (SocketId, CoreId), \
-      .NumberOfPrivateResources = 3 }, \
+      .NumberOfPrivateResources = 2 }, \
     .Resources = { \
       RHEA1_PPTT_ARRAY_OFFSET (L1I, RHEA1_PPTT_CORE_INDEX (SocketId, CoreId)), \
-      RHEA1_PPTT_ARRAY_OFFSET (L1D, RHEA1_PPTT_CORE_INDEX (SocketId, CoreId)), \
-      RHEA1_PPTT_ARRAY_OFFSET (L2, RHEA1_PPTT_CORE_INDEX (SocketId, CoreId)) } }
+      RHEA1_PPTT_ARRAY_OFFSET (L1D, RHEA1_PPTT_CORE_INDEX (SocketId, CoreId)) } }
 
 #define RHEA1_PPTT_128(Macro, SocketId) \
   Macro(SocketId,0),Macro(SocketId,1),Macro(SocketId,2),Macro(SocketId,3),Macro(SocketId,4),Macro(SocketId,5),Macro(SocketId,6),Macro(SocketId,7), \
