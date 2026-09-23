@@ -172,6 +172,24 @@ Deux pièges découverts en écrivant ce script, à connaître pour tout futur p
 Le script étant volontairement simple (cf. décision "priorité à la simplicité"), il doit être recopié manuellement
 dans le dossier `Build/.../X64/` après chaque build tant qu'aucune automatisation n'est en place.
 
+### Activer `acpiview`
+
+`smbiosview` est déjà fourni par `UefiShellDebug1CommandsLib`. Pour ajouter `acpiview` au Shell EmulatorPkg,
+ajouter dans le bloc `ShellPkg/Application/Shell/Shell.inf` du `EmulatorPkg.dsc` :
+
+```ini
+NULL|ShellPkg/Library/UefiShellAcpiViewCommandLib/UefiShellAcpiViewCommandLib.inf
+```
+
+Le mapping doit être `NULL|` : `Shell.inf` ne déclare pas la classe `AcpiViewCommandLib`, mais le constructeur de
+la bibliothèque enregistre la commande au démarrage du Shell. Aucun ajout FDF n'est nécessaire, car la bibliothèque
+est liée dans l'application Shell déjà embarquée.
+
+Après rebuild, `acpiview` est reconnu. Dans l'EmulatorPkg vanilla actuel, son exécution peut ensuite répondre
+`Failed to find ACPI Table Guid in System Configuration Table.` : cela signifie que la commande fonctionne mais
+qu'aucune table ACPI n'est encore publiée par le modèle EmulatorPkg, et non que l'intégration de la commande a
+échoué.
+
 ### Journal de mise au point du build CLANGDWARF (erreurs, causes, remèdes)
 
 Premier build après clone : plusieurs erreurs successives, résolues une à une. Dans l'ordre rencontré :
