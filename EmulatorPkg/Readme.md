@@ -237,10 +237,35 @@ Tous les flags de propriété cache sont valides. Chaque `CoreRecord` regroupe l
 processor correspondant. Chaque core possède deux ressources privées (L1I et L1D) ;
 L1I/L1D pointent vers le L2 par `NextLevelOfCache`, et le L2 pointe vers le SLC de son socket.
 
-Après rebuild, `acpiview -s PPTT -d` produit un dump binaire de 29 836 octets, décodable par `iasl -d`. La table
-contient donc maintenant le header, le nœud `Board`, 770 caches, 2 nœuds socket et 256 nœuds core. La cohérence avec la MADT sera
+Après rebuild, `acpiview -s PPTT -d` produit un dump binaire de 28 832 octets, décodable par `iasl -d`. La table
+contient le header, le nœud `Board`, 770 caches, 2 nœuds socket et 256 nœuds core. La cohérence avec la MADT sera
 validée séparément : la PPTT décrit la capacité/topologie constante, tandis que la MADT reste la source de découverte
 et d'activation des processeurs.
+
+### Roadmap : du PoC C à la génération déclarative Python
+
+La structure C constante actuelle a servi à valider le chemin complet `EmulatorPkg -> acpiview -> PPTT0000.bin -> iasl`.
+Une évolution naturelle consiste à déplacer la source de vérité dans un générateur Python pré-build, sans changer le
+mécanisme d'installation `PpttDxe` dans un premier temps.
+
+Étapes proposées :
+
+1. **Modèle déclaratif** : décrire les sockets, cores et caches avec des `dataclass` Python (`Cache`, `CoreRecord`,
+  `Socket`, `PpttTable`). Prévoir les variantes `2x128`, `2x80` et `1x80` sans dupliquer la logique.
+2. **Résolution des références** : construire `Board -> Socket -> CoreRecord`, puis résoudre les offsets ACPI depuis
+  la base de la table complète : `Core -> L1I/L1D`, `L1I/L1D -> L2`, `L2 -> SLC`.
+3. **Sérialisation binaire** : produire `Rhea1Pptt.bin` avec `struct.pack`/`bytearray`, la longueur totale et le
+  checksum ACPI calculés automatiquement.
+4. **Validation générateur** : vérifier les invariants de cardinalité, offsets dans la table, longueurs de nœuds,
+  IDs cache, hiérarchie `Board -> Socket -> Core`, et checksum avant d'écrire le fichier.
+5. **Intégration build** : générer le binaire dans `Build/Generated/`, l'embarquer avec la règle EDK2 adaptée, puis
+  conserver un installateur minimal qui publie la table via `EFI_ACPI_TABLE_PROTOCOL`.
+6. **Régression** : comparer le binaire généré à `acpiview -s PPTT -d`, décoder avec `iasl -d`, puis exécuter les
+  verdicts Python sur les artefacts ACPI/SMBIOS extraits du Shell.
+
+Le binaire est l'artefact testable ; le modèle Python est la source de vérité lisible. Les lambdas peuvent rester
+limitées aux petits générateurs répétitifs : la résolution explicite des références est préférable pour rendre les
+offsets et les invariants auditables.
 
 ### Journal de mise au point du build CLANGDWARF (erreurs, causes, remèdes)
 
