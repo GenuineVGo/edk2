@@ -20,21 +20,12 @@
   MdePkg/MdePkg.dec
 
 [LibraryClasses]
-  BaseMemoryLib
   DebugLib
-  PcdLib
   UefiBootServicesTableLib
   UefiDriverEntryPoint
 
 [Protocols]
   gEfiAcpiTableProtocolGuid    ## CONSUMES
-
-[Pcd]
-  gEfiMdeModulePkgTokenSpaceGuid.PcdAcpiDefaultOemId            ## CONSUMES
-  gEfiMdeModulePkgTokenSpaceGuid.PcdAcpiDefaultOemTableId       ## CONSUMES
-  gEfiMdeModulePkgTokenSpaceGuid.PcdAcpiDefaultOemRevision      ## CONSUMES
-  gEfiMdeModulePkgTokenSpaceGuid.PcdAcpiDefaultCreatorId        ## CONSUMES
-  gEfiMdeModulePkgTokenSpaceGuid.PcdAcpiDefaultCreatorRevision  ## CONSUMES
 
 [Depex]
   gEfiAcpiTableProtocolGuid

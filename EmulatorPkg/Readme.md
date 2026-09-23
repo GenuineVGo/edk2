@@ -205,16 +205,33 @@ Si le Shell démarre sur un autre volume ou dans un répertoire non writable, `a
 `Unable to write to the current directory, check if media is writable.` Dans ce cas, utiliser `FS0:` puis vérifier
 le répertoire courant avec `pwd` avant de relancer la commande.
 
-### Première table ACPI : header PPTT minimal
+### Première table ACPI : PPTT constante Rhea1
 
-Le PoC ajoute [PpttDxe/PpttDxe.c](PpttDxe/PpttDxe.c) et son fichier INF. Le driver publie uniquement un header
-`PPTT` ACPI via `EFI_ACPI_TABLE_PROTOCOL`; aucun nœud processeur ni cache n'est encore décrit. Comme ce protocole
-n'était pas encore embarqué par EmulatorPkg, `AcpiTableDxe` est également ajouté dans `EmulatorPkg.dsc` et
+Le driver [PpttDxe/PpttDxe.c](PpttDxe/PpttDxe.c) publie une PPTT entièrement déterministe via
+`EFI_ACPI_TABLE_PROTOCOL`, sans `PlatformInfo`, HOB, PCD dynamique ni mise à jour de la topologie à l'exécution.
+`AcpiTableDxe` fournit le protocole ACPI générique et est embarqué avec `PpttDxe` dans `EmulatorPkg.dsc` et
 `EmulatorPkg.fdf`.
 
-Après rebuild, `acpiview -h` confirme : signature `PPTT`, longueur `36` octets (header seul), révision `3` et
-checksum valide. La sortie signale également une entrée XSDT nulle (`Entry[0]`) ; ce constat préexistant est
-indépendant de la PPTT et sera traité séparément.
+La constante décrit :
+
+```text
+2 sockets
+128 cores par socket
+1 SLC/L3 partagé par socket
+1 L2 privé par core
+1 L1D privé par core
+1 L1I privé par core
+```
+
+La hiérarchie est `socket -> core`; aucun nœud cluster intermédiaire n'est ajouté. Les IDs processeur suivent
+`ACPI_CPU_ID_ENCODE(socket, core)`. Les tailles actuellement utilisées sont des placeholders explicitement marqués
+dans le source : L1I/L1D = 32 KiB, L2 = 64 KiB, SLC = 80 MiB. Les propriétés cache non établies (sets,
+associativité, taille de ligne et cache ID) restent invalides dans les flags PPTT plutôt que d'être inventées.
+
+Après rebuild, `acpiview -s PPTT -d` produit un dump binaire de 29 836 octets, décodable par `iasl -d`. La table
+contient donc maintenant le header, les caches, les sockets et les 256 nœuds core. La cohérence avec la MADT sera
+validée séparément : la PPTT décrit la capacité/topologie constante, tandis que la MADT reste la source de découverte
+et d'activation des processeurs.
 
 ### Journal de mise au point du build CLANGDWARF (erreurs, causes, remèdes)
 
