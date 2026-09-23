@@ -91,8 +91,8 @@ UEFI sur un terminal série VT100, pour un usage headless / scriptable (CI, shif
   ligne du Shell UEFI (VT100). Sans ce correctif, l'effacement visuel fonctionne mais **la commande réellement
   exécutée reste fausse silencieusement** (découvert via [Unix/tests/validate_console_poc.py](Unix/tests/validate_console_poc.py))
 - [Unix/host.sh](Unix/host.sh) : script de lancement qui désactive `icrnl` sur le terminal hôte (sinon la touche
-  Entrée casse la saisie dans l'EFI Shell, la console série VT100 gérant elle-même le CR) et restaure le terminal
-  à la sortie (`trap ... EXIT INT TERM`), même en cas de crash ou de Ctrl+C
+  Entrée casse la saisie dans l'EFI Shell, la console série VT100 gérant elle-même le CR), restaure le terminal
+  à la sortie (`trap ... EXIT INT TERM`) et duplique stdout + stderr vers le terminal et `debug.log`
 
 ### Build avec la toolchain Clang/LLVM
 
@@ -109,45 +109,41 @@ cd Build/EmulatorX64/DEBUG_CLANGDWARF/X64/
 ./host.sh
 ```
 
-### Pourquoi il n'y a aucun fichier de log par défaut
+### Journal d'exécution
 
-Comme pour `build` (voir tableau ci-dessus), rien n'est jamais persisté sur disque par défaut : tout part sur les
-flux du process `Host`. En creusant le code source, deux canaux bien distincts existent :
+`host.sh` regroupe volontairement les deux flux du process `Host` dans un seul fichier `debug.log`, tout en les
+laissant visibles dans le terminal grâce à `tee` :
 
 - **Console UEFI Shell (interactive)** : `stdin`/`stdout` réels du process (`gEmuThunk->ConfigStdIn` /
   `WriteStdOut` dans [Library/DxeEmuSerialPortLib/DxeEmuSerialPortLib.c](Library/DxeEmuSerialPortLib/DxeEmuSerialPortLib.c)),
   reliés à votre nouveau device path console VT100.
-- **Boot log PEI/DXE (`DEBUG()`)** : redirigé vers `stderr` du process, indépendamment de la console UEFI
+- **Boot log PEI/DXE (`DEBUG()`)** : écrit sur `stderr` du process
   (`gEmuThunk->WriteStdErr` → `write(STDERR_FILENO, ...)` dans
   [Unix/Host/EmuThunk.c](Unix/Host/EmuThunk.c), voir aussi le mapping `SerialPortLib|...DxeEmuStdErrSerialPortLib...`
   dans [EmulatorPkg.dsc](EmulatorPkg.dsc) lignes 401/414).
 
-Ces deux flux étant séparés (stdout vs stderr), `host.sh` peut rediriger uniquement `stderr` vers un fichier
-**sans jamais toucher `stdin`/`stdout`** : le Shell reste 100% interactif, seul le boot log est capturé.
-C'est ce que fait le script par défaut (`debug_boot.log` à côté du binaire `Host`) :
+Les deux flux sont fusionnés par `2>&1` avant le `tee`. `stdin` reste attaché au terminal : le Shell reste donc
+interactif, tandis que stdout et stderr sont enregistrés ensemble dans `debug.log`, à côté du binaire `Host` :
 
 ```bash
-./host.sh                       # boot log -> ./debug_boot.log, Shell interactif inchangé
-LOGFILE=/tmp/run1.log ./host.sh # nom de fichier personnalisé
+./host.sh                       # sortie terminal + ./debug.log
+cat debug.log                   # relire la session complète
 ```
 
 ### Logger la sortie des commandes du Shell UEFI (ex: `acpiview`)
 
-Le contenu du Shell UEFI (ce que produit `acpiview`, `dh`, etc.) transite par `stdout`, pas par `stderr` : il ne
-suffit pas de rediriger `stdout` vers un fichier, sinon plus rien ne s'affiche à l'écran. `host.sh` duplique donc
-`stdout` vers le terminal **et** vers un fichier via `tee` (process substitution bash `> >(tee ...)`, qui préserve
-le code de sortie réel de `Host`, contrairement à un simple `| tee`) :
+Le contenu du Shell UEFI (ce que produit `acpiview`, `dh`, etc.) transite par `stdout`. `host.sh` le duplique vers
+le terminal et vers `debug.log` via `tee`, avec le boot log `stderr` dans le même fichier :
 
 ```bash
-./host.sh                              # sortie Shell -> ./shell_console.log (+ affichée normalement)
-SHELL_LOGFILE=/tmp/acpiview.log ./host.sh
+./host.sh                              # sortie Shell + boot log -> ./debug.log
 ```
 
 Le fichier contient les séquences d'échappement VT100 (couleurs, positionnement curseur) puisque c'est une vraie
 émulation de terminal. Pour le relire proprement une fois la session terminée :
 
 ```bash
-sed -r 's/\x1B\[[0-9;]*[a-zA-Z]//g' shell_console.log | less
+sed -r 's/\x1B\[[0-9;]*[a-zA-Z]//g' debug.log | less
 ```
 
 ### Validation automatisée du PoC console (Entrée, Backspace, `reset -s`, stabilité)
